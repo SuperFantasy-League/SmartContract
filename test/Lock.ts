@@ -2,126 +2,310 @@ import {
   time,
   loadFixture,
 } from "@nomicfoundation/hardhat-toolbox/network-helpers";
-import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { expect } from "chai";
 import hre from "hardhat";
 
-describe("Lock", function () {
-  // We define a fixture to reuse the same setup in every test.
-  // We use loadFixture to run this setup once, snapshot that state,
-  // and reset Hardhat Network to that snapshot in every test.
-  async function deployOneYearLockFixture() {
-    const ONE_YEAR_IN_SECS = 365 * 24 * 60 * 60;
-    const ONE_GWEI = 1_000_000_000;
+describe("SuperFantasy", function () {
+  // Fixture to deploy all contracts
+  async function deployContractsFixture() {
+    const [owner, admin, user1, user2] = await hre.ethers.getSigners();
 
-    const lockedAmount = ONE_GWEI;
-    const unlockTime = (await time.latest()) + ONE_YEAR_IN_SECS;
+    // Deploy PlayerCard contract
+    const PlayerCard = await hre.ethers.getContractFactory("PlayerCard");
+    const playerCard = await PlayerCard.deploy();
 
-    // Contracts are deployed using the first signer/account by default
-    const [owner, otherAccount] = await hre.ethers.getSigners();
+    // Deploy Factories
+    const LeagueFactory = await hre.ethers.getContractFactory("LeagueFactory");
+    const leagueFactory = await LeagueFactory.deploy(await playerCard.getAddress());
 
-    const Lock = await hre.ethers.getContractFactory("Lock");
-    const lock = await Lock.deploy(unlockTime, { value: lockedAmount });
+    const TournamentFactory = await hre.ethers.getContractFactory("TournamentFactory");
+    const tournamentFactory = await TournamentFactory.deploy();
 
-    return { lock, unlockTime, lockedAmount, owner, otherAccount };
+    // Constants for testing
+    const WEEK_IN_SECS = 7 * 24 * 60 * 60;
+    const currentTime = await time.latest();
+    const leagueStartTime = currentTime + WEEK_IN_SECS;
+    const leagueEndTime = leagueStartTime + WEEK_IN_SECS;
+    const entryFee = hre.ethers.parseEther("0.1");
+    const maxTeams = 10;
+
+    return {
+      playerCard,
+      leagueFactory,
+      tournamentFactory,
+      owner,
+      admin,
+      user1,
+      user2,
+      currentTime,
+      leagueStartTime,
+      leagueEndTime,
+      entryFee,
+      maxTeams,
+    };
   }
 
-  describe("Deployment", function () {
-    it("Should set the right unlockTime", async function () {
-      const { lock, unlockTime } = await loadFixture(deployOneYearLockFixture);
-
-      expect(await lock.unlockTime()).to.equal(unlockTime);
-    });
-
-    it("Should set the right owner", async function () {
-      const { lock, owner } = await loadFixture(deployOneYearLockFixture);
-
-      expect(await lock.owner()).to.equal(owner.address);
-    });
-
-    it("Should receive and store the funds to lock", async function () {
-      const { lock, lockedAmount } = await loadFixture(
-        deployOneYearLockFixture
-      );
-
-      expect(await hre.ethers.provider.getBalance(lock.target)).to.equal(
-        lockedAmount
-      );
-    });
-
-    it("Should fail if the unlockTime is not in the future", async function () {
-      // We don't use the fixture here because we want a different deployment
-      const latestTime = await time.latest();
-      const Lock = await hre.ethers.getContractFactory("Lock");
-      await expect(Lock.deploy(latestTime, { value: 1 })).to.be.revertedWith(
-        "Unlock time should be in the future"
-      );
-    });
-  });
-
-  describe("Withdrawals", function () {
-    describe("Validations", function () {
-      it("Should revert with the right error if called too soon", async function () {
-        const { lock } = await loadFixture(deployOneYearLockFixture);
-
-        await expect(lock.withdraw()).to.be.revertedWith(
-          "You can't withdraw yet"
-        );
+  describe("PlayerCard", function () {
+    describe("Deployment", function () {
+      it("Should set the right owner", async function () {
+        const { playerCard, owner } = await loadFixture(deployContractsFixture);
+        
+        expect(await playerCard.hasRole(await playerCard.DEFAULT_ADMIN_ROLE(), owner.address))
+          .to.be.true;
       });
 
-      it("Should revert with the right error if called from another account", async function () {
-        const { lock, unlockTime, otherAccount } = await loadFixture(
-          deployOneYearLockFixture
-        );
-
-        // We can increase the time in Hardhat Network
-        await time.increaseTo(unlockTime);
-
-        // We use lock.connect() to send a transaction from another account
-        await expect(lock.connect(otherAccount).withdraw()).to.be.revertedWith(
-          "You aren't the owner"
-        );
-      });
-
-      it("Shouldn't fail if the unlockTime has arrived and the owner calls it", async function () {
-        const { lock, unlockTime } = await loadFixture(
-          deployOneYearLockFixture
-        );
-
-        // Transactions are sent using the first signer by default
-        await time.increaseTo(unlockTime);
-
-        await expect(lock.withdraw()).not.to.be.reverted;
+      it("Should grant MINTER_ROLE to owner", async function () {
+        const { playerCard, owner } = await loadFixture(deployContractsFixture);
+        
+        expect(await playerCard.hasRole(await playerCard.MINTER_ROLE(), owner.address))
+          .to.be.true;
       });
     });
 
-    describe("Events", function () {
-      it("Should emit an event on withdrawals", async function () {
-        const { lock, unlockTime, lockedAmount } = await loadFixture(
-          deployOneYearLockFixture
+    describe("Minting", function () {
+      it("Should mint a new player card", async function () {
+        const { playerCard, user1 } = await loadFixture(deployContractsFixture);
+
+        await playerCard.mintPlayer(
+          user1.address,
+          "Test Player",
+          1, // GK position
+          1, // Team ID
+          1000 // Initial value
         );
 
-        await time.increaseTo(unlockTime);
-
-        await expect(lock.withdraw())
-          .to.emit(lock, "Withdrawal")
-          .withArgs(lockedAmount, anyValue); // We accept any value as `when` arg
+        expect(await playerCard.ownerOf(1)).to.equal(user1.address);
       });
-    });
 
-    describe("Transfers", function () {
-      it("Should transfer the funds to the owner", async function () {
-        const { lock, unlockTime, lockedAmount, owner } = await loadFixture(
-          deployOneYearLockFixture
-        );
+      it("Should fail if non-minter tries to mint", async function () {
+        const { playerCard, user1 } = await loadFixture(deployContractsFixture);
 
-        await time.increaseTo(unlockTime);
+        await expect(
+          playerCard.connect(user1).mintPlayer(
+            user1.address,
+            "Test Player",
+            1,
+            1,
+            1000
+          )
+        ).to.be.reverted;
+      });
 
-        await expect(lock.withdraw()).to.changeEtherBalances(
-          [owner, lock],
-          [lockedAmount, -lockedAmount]
-        );
+      it("Should update player points correctly", async function () {
+        const { playerCard, user1 } = await loadFixture(deployContractsFixture);
+
+        await playerCard.mintPlayer(user1.address, "Test Player", 1, 1, 1000);
+        await playerCard.updatePlayerPoints(1, 10);
+
+        const player = await playerCard.players(1);
+        expect(player.points).to.equal(10);
       });
     });
   });
-});
+
+  describe("LeagueFactory", function () {
+    describe("League Creation", function () {
+      it("Should create a new league", async function () {
+        const { leagueFactory, leagueStartTime, leagueEndTime, entryFee, maxTeams } = 
+          await loadFixture(deployContractsFixture);
+
+        await expect(
+          leagueFactory.createLeague(
+            "Test League",
+            entryFee,
+            maxTeams,
+            leagueStartTime,
+            leagueEndTime
+          )
+        ).to.emit(leagueFactory, "LeagueCreated");
+      });
+
+      it("Should fail if end time is before start time", async function () {
+        const { leagueFactory, currentTime, entryFee, maxTeams } = 
+          await loadFixture(deployContractsFixture);
+
+        await expect(
+          leagueFactory.createLeague(
+            "Test League",
+            entryFee,
+            maxTeams,
+            currentTime + 1000,
+            currentTime + 500 // End time before start time
+          )
+        ).to.be.revertedWith("Invalid end time");
+      });
+    });
+  });
+
+  describe("League", function () {
+    async function deployLeagueFixture() {
+      const baseFixture = await deployContractsFixture();
+      
+      // Create a league
+      const tx = await baseFixture.leagueFactory.createLeague(
+        "Test League",
+        baseFixture.entryFee,
+        baseFixture.maxTeams,
+        baseFixture.leagueStartTime,
+        baseFixture.leagueEndTime
+      );
+      const receipt = await tx.wait();
+      const event = receipt?.logs[0];
+      const leagueAddress = event?.args?.leagueAddress;
+      
+      const League = await hre.ethers.getContractFactory("League");
+      const league = League.attach(leagueAddress);
+
+      return {
+        ...baseFixture,
+        league,
+      };
+    }
+
+    describe("Team Registration", function () {
+      it("Should register a team with correct entry fee", async function () {
+        const { league, playerCard, user1, entryFee } = await loadFixture(
+          deployLeagueFixture
+        );
+
+        // Mint player cards for the team
+        const playerIds = [];
+        for (let i = 0; i < 11; i++) {
+          await playerCard.mintPlayer(user1.address, `Player ${i}`, 1, 1, 1000);
+          playerIds.push(i + 1);
+        }
+
+        await expect(
+          league.connect(user1).registerTeam(playerIds, { value: entryFee })
+        ).to.emit(league, "TeamRegistered");
+      });
+
+      it("Should fail with incorrect entry fee", async function () {
+        const { league, playerCard, user1 } = await loadFixture(
+          deployLeagueFixture
+        );
+
+        const playerIds = [];
+        for (let i = 0; i < 11; i++) {
+          await playerCard.mintPlayer(user1.address, `Player ${i}`, 1, 1, 1000);
+          playerIds.push(i + 1);
+        }
+
+        await expect(
+          league.connect(user1).registerTeam(playerIds, { value: 0 })
+        ).to.be.revertedWith("Incorrect entry fee");
+      });
+    });
+  });
+
+  describe("TournamentFactory", function () {
+    describe("Tournament Creation", function () {
+      it("Should create a new tournament", async function () {
+        const { tournamentFactory, leagueStartTime, leagueEndTime } = 
+          await loadFixture(deployContractsFixture);
+
+        await expect(
+          tournamentFactory.createTournament(
+            "Test Tournament",
+            leagueStartTime,
+            leagueEndTime
+          )
+        ).to.emit(tournamentFactory, "TournamentCreated");
+      });
+    });
+  });
+
+  describe("Tournament", function () {
+    async function deployTournamentFixture() {
+      const baseFixture = await deployContractsFixture();
+      
+      // Create a tournament
+      const tx = await baseFixture.tournamentFactory.createTournament(
+        "Test Tournament",
+        baseFixture.leagueStartTime,
+        baseFixture.leagueEndTime
+      );
+      const receipt = await tx.wait();
+      const event = receipt?.logs[0];
+      const tournamentAddress = event?.args?.tournamentAddress;
+      
+      const Tournament = await hre.ethers.getContractFactory("Tournament");
+      const tournament = Tournament.attach(tournamentAddress);
+
+      // Add some prize pool
+      await baseFixture.owner.sendTransaction({
+        to: tournamentAddress,
+        value: hre.ethers.parseEther("1.0")
+      });
+
+      return {
+        ...baseFixture,
+        tournament,
+      };
+    }
+
+    describe("Reward Distribution", function () {
+      it("Should distribute rewards correctly", async function () {
+        const { tournament, user1, user2, leagueEndTime, owner } = await loadFixture(
+          deployTournamentFixture
+        );
+
+        await time.increaseTo(leagueEndTime + 1);
+
+        const winners = [user1.address, user2.address];
+        const amounts = [
+          hre.ethers.parseEther("0.6"),
+          hre.ethers.parseEther("0.4")
+        ];
+
+        // Tournament admin (owner) distributes rewards
+        await expect(
+          tournament.connect(owner).distributeRewards(winners, amounts)
+        ).to.emit(tournament, "RewardDistributed");
+      });
+
+      it("Should allow winners to claim rewards", async function () {
+        const { tournament, user1, user2, leagueEndTime, owner } = await loadFixture(
+          deployTournamentFixture
+        );
+
+        await time.increaseTo(leagueEndTime + 1);
+
+        const winners = [user1.address, user2.address];
+        const amounts = [
+          hre.ethers.parseEther("0.6"),
+          hre.ethers.parseEther("0.4")
+        ];
+
+        // Tournament admin (owner) distributes rewards
+        await tournament.connect(owner).distributeRewards(winners, amounts);
+
+        // Winner claims reward
+        await expect(
+          tournament.connect(user1).claimReward()
+        ).to.changeEtherBalance(user1, amounts[0]);
+      });
+
+      it("Should fail if non-winner tries to claim", async function () {
+        const { tournament, user1, user2, leagueEndTime, owner, admin } = await loadFixture(
+          deployTournamentFixture
+        );
+
+        await time.increaseTo(leagueEndTime + 1);
+
+        const winners = [user1.address, user2.address];
+        const amounts = [
+          hre.ethers.parseEther("0.6"),
+          hre.ethers.parseEther("0.4")
+        ];
+
+        await tournament.connect(owner).distributeRewards(winners, amounts);
+
+        // Non-winner tries to claim
+        await expect(
+          tournament.connect(admin).claimReward()
+        ).to.be.revertedWith("No reward to claim");
+      });
+    });
+  });
+})
