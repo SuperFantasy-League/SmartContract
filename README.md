@@ -1,24 +1,28 @@
-SuperFantasy Platform Smart Contracts
-SuperFantasy is a decentralized fantasy football platform where users can create leagues, manage teams, trade player cards as NFTs, and participate in tournaments.
-Table of Contents
+# AceFantasy Platform Smart Contracts
 
-Contract Architecture
-Prerequisites
-Setup & Deployment
-Contract Interactions
-System Features
-User Flows
-Technical Notes
+AceFantasy is a decentralized fantasy football platform where users can create leagues, manage teams, trade player cards as NFTs, and participate in tournaments.
 
-Contract Architecture
+## Table of Contents
+
+- Contract Architecture
+- Prerequisites
+- Setup & Deployment
+- Contract Interactions
+- System Features
+- User Flows
+- Technical Notes
+
+### Contract Architecture
+
 The platform consists of four main smart contracts:
-CopyPlayerCard (NFT)
+PlayerCard (NFT)
     │
     ├── LeagueFactory
     │       └── League (Individual Instances)
     │
     └── TournamentFactory
             └── Tournament (Individual Instances)
+
 Core Contracts
 
 PlayerCard.sol
@@ -27,13 +31,11 @@ ERC721 NFT implementation
 Represents football players as NFTs
 Manages player stats and values
 
-
 LeagueFactory.sol
 
 Creates new league instances
 Tracks all created leagues
 Manages league deployment
-
 
 League.sol
 
@@ -41,21 +43,17 @@ Individual league instance
 Handles team registration
 Manages league participants
 
-
 TournamentFactory.sol
 
 Creates new tournament instances
 Tracks all tournaments
 Manages tournament deployment
 
-
 Tournament.sol
 
 Individual tournament instance
 Handles reward distribution
 Manages winners and prizes
-
-
 
 Prerequisites
 
@@ -64,8 +62,6 @@ OpenZeppelin Contracts
 
 ERC721
 AccessControl
-
-
 
 Setup & Deployment
 
@@ -86,6 +82,7 @@ playerCard.grantRole(MINTER_ROLE, adminAddress);
 // Tournament factory admin role
 tournamentFactory.grantRole(DEFAULT_ADMIN_ROLE, adminAddress);
 Contract Interactions
+
 1. Player Card Management
 solidityCopy// Mint new player card
 playerCard.mintPlayer(
@@ -182,20 +179,16 @@ Access Control
 Role-based permissions using OpenZeppelin's AccessControl
 Specific roles for minting and tournament management
 
-
 Reentrancy Protection
 
 Custom reentrancy guard for financial transactions
 Status checks before sensitive operations
-
 
 Value Verification
 
 Entry fee validation
 Player ownership verification
 Tournament timing checks
-
-
 
 Gas Optimization
 
@@ -205,14 +198,11 @@ Reduces deployment costs
 Optimizes contract size
 Better state management
 
-
 Event Logging
 
 Key actions emit events
 Efficient frontend integration
 Transaction tracking
-
-
 
 Upgradability Considerations
 
@@ -228,21 +218,17 @@ Set reasonable max team limits
 Configure appropriate time windows
 Consider entry fee economics
 
-
 Tournament Management
 
 Plan reward distribution carefully
 Ensure sufficient prize pool before distribution
 Verify winner addresses
 
-
 Player Card Updates
 
 Regular stat updates
 Value adjustments based on performance
 Maintain accurate player data
-
-
 
 Development and Testing
 
@@ -251,9 +237,11 @@ bashCopy# Install dependencies
 npm install @openzeppelin/contracts
 
 # Compile contracts
+
 npx hardhat compile
 
 # Run tests
+
 npx hardhat test
 
 Deployment Checklist
@@ -264,8 +252,6 @@ Set up roles and permissions
 Verify contracts on explorer
 Test basic functionality
 
-
-
 Maintenance
 
 Regular Tasks
@@ -273,7 +259,6 @@ Regular Tasks
 Update player stats
 Monitor league activity
 Process tournament rewards
-
 
 Emergency Procedures
 
