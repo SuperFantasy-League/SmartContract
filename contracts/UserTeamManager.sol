@@ -4,45 +4,84 @@ pragma solidity ^0.8.27;
 import "./FantasyHelpers.sol";
 
 contract UserTeamManager is FantasyHelpers {
-	address admin;
-	uint256 userCounter;
+    address admin;
+    uint256 userCounter;
+    uint256 teamCounter;
 
-	// ACCESS CONTROL ROLES
-	bytes32 public constant ADMIN_ROLE = DEFAULT_ADMIN_ROLE;
-	bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
-	bytes32 public constant USER_ROLE = keccak256("USER_ROLE");
+    // ACCESS CONTROL ROLES
+    bytes32 public constant ADMIN_ROLE = DEFAULT_ADMIN_ROLE;
+    bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
+    bytes32 public constant USER_ROLE = keccak256("USER_ROLE");
 
-	struct User {
-		uint256 id;
-		string name;
-	}
-	User[] public userList;
+    struct User {
+        uint256 id;
+        string name;
+    }
 
-	mapping(address => id) users;
+    struct Team {
+        uint256 teamId;
+        uint256 leagueId;
+        uint256 totalPoints;
+        uint256[] playerIds;
+        address owner;
+    }
 
-	constructor {
-		_grantRole(ADMIN_ROLE, msg.sender);
-		admin = msg.sender;
-	}
+    mapping(address => User) public users;
+    mapping(uint256 => Team) public teams;
+    mapping(address user => mapping(uint256 leagueId => uint256[] teamIds)) public userTeams;
+    mapping() public ;
 
-	// Registers a new user as a league participant or an admin
-	function registerUser(string _name) external {
-		uint256 userCount = ++userCounter;
+    constructor {
+        _grantRole(ADMIN_ROLE, msg.sender);
+        admin = msg.sender;
+    }
 
-		User memory newUser = User(userCount, _name);
+    // Registers a new user as a league participant or an admin
+    function registerUser(string _name) external {
+        checkZeroAddress();
 
-		users[userCounter] = newUser;
-		userList.push(newUser);
+        uint256 userCount = ++userCounter;
 
-		emit UserRegistered(msg.sender);
-	}
+        User memory newUser = User(userCount, _name);
+        users[msg.sender] = newUser;
 
-	// Set specific roles for users, such as assigning player and admin rights
-	// assignRole(address user, string role)
+        emit UserRegistered(msg.sender);
+    }
 
-	// Allow users to create a fantasy team within a budget
-	createTeam(address user, uint256[] playerIds, uint256 budget)
+    // Set specific roles for users, such as assigning player and admin rights
+    // assignRole(address user, string role)
 
-	// Enables users to update teams based on dynamic player statistics and valuations
-	updateTeam(address user, uint256[] playerIds)
+    // Allow users to create a fantasy team within a budget
+    function createTeam(uint256 _leagueId, uint256[] calldata _playerIds) external {
+        checkZeroAddress();
+
+        uint256 teamCount = ++teamCounter;
+
+        Team memory newTeam = Team({
+            teamId: teamCount,
+            leagueId: _leagueId,
+            playerIds: _playerIds,
+            owner: msg.sender
+        });
+
+        teams[teamCount] = newTeam;
+        userTeams[msg.sender][_leagueId].push(teamCount);
+
+        emit TeamCreated(msg.sender, teamCount);
+    }
+
+    // Enables users to update teams based on dynamic player statistics and valuations
+    function updateTeam(uint256 _teamId, uint256[] calldata _playerIds) external {
+        Team storage team = teams[_teamId];
+
+        team.playerIds = _playerIds;
+
+        emit TeamCreated(msg.sender, _teamId);
+    }
+
+    // REWORK !!!
+    function getTeam(address user) external view returns (uint256[] memory playerIds, uint256 totalValue) {
+        Team memory team = userTeams[user];
+        return (team.playerIds, team.totalValue);
+    }
 }
