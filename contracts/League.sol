@@ -162,4 +162,20 @@ contract League {
         if (block.timestamp < startTime) return 0;
         return (block.timestamp - startTime) / WEEK_DURATION;
     }
+    function registerCreatorTeam(address creator, uint256[] calldata playerIds) external payable {
+    require(msg.sender == address(leagueFactory), "Only factory");
+    require(msg.value == entryFee, "Incorrect entry fee");
+    
+    teams[creator] = Team(creator, playerIds, 0, true);
+    participants.push(creator);
+    totalPrizePool += msg.value;
+    
+    uint256 weeksInLeague = (endTime - startTime) / WEEK_DURATION;
+    uint256 weeklyPrize = msg.value / weeksInLeague;
+    for (uint256 week = 0; week < weeksInLeague; week++) {
+        weeklyPrizePools[week] += weeklyPrize;
+    }
+    
+    emit TeamRegistered(creator, playerIds);
+}
 }

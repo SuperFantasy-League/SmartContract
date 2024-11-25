@@ -4,10 +4,6 @@ pragma solidity ^0.8.27;
 import "./UserPlayerManager.sol";
 import "./League.sol";
 
-/**
- * @title LeagueFactory
- * @notice Creates and manages fantasy football leagues
- */
 contract LeagueFactory {
     UserPlayerManager public userPlayerManager;
     address public admin;
@@ -15,11 +11,6 @@ contract LeagueFactory {
     mapping(uint256 => address) public leagues;
 
     event LeagueCreated(uint256 indexed leagueId, address leagueAddress, string name, address owner);
-
-    modifier onlyAdmin() {
-        require(msg.sender == admin, "Only admin");
-        _;
-    }
 
     constructor(address _userPlayerManager) {
         require(_userPlayerManager != address(0), "Invalid UserPlayerManager");
@@ -32,12 +23,15 @@ contract LeagueFactory {
         uint256 entryFee,
         uint256 maxTeams,
         uint256 startTime,
-        uint256 endTime
-    ) external returns (address) {
+        uint256 endTime,
+        uint256[] calldata playerIds
+    ) external payable returns (address) {
         require(bytes(name).length > 0, "Empty name");
         require(startTime > block.timestamp, "Start time must be future");
         require(endTime > startTime, "End time must be after start");
         require(maxTeams > 0, "Invalid max teams");
+        require(msg.value == entryFee, "Incorrect entry fee");
+        require(userPlayerManager.validateTeamPlayers(playerIds), "Invalid team composition");
         
         currentLeagueId++;
         
@@ -54,6 +48,9 @@ contract LeagueFactory {
         
         address leagueAddress = address(newLeague);
         leagues[currentLeagueId] = leagueAddress;
+
+        // Register creator's team
+        League(leagueAddress).registerCreatorTeam{value: msg.value}(msg.sender, playerIds);
         
         emit LeagueCreated(currentLeagueId, leagueAddress, name, msg.sender);
         return leagueAddress;
@@ -62,9 +59,5 @@ contract LeagueFactory {
     function getLeague(uint256 leagueId) external view returns (address) {
         require(leagueId > 0 && leagueId <= currentLeagueId, "Invalid league ID");
         return leagues[leagueId];
-    }
-
-    function getCurrentLeagueId() external view returns (uint256) {
-        return currentLeagueId;
     }
 }
