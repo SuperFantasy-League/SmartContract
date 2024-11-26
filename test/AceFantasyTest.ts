@@ -5,7 +5,7 @@ import {
 import { expect } from "chai";
 import hre from "hardhat";
 
-describe("SuperFantasy", function () {
+describe("AceFantasy", function () {
   // Fixture to deploy all contracts
   async function deployContractsFixture() {
     const [owner, admin, user1, user2] = await hre.ethers.getSigners();
@@ -49,14 +49,14 @@ describe("SuperFantasy", function () {
     describe("Deployment", function () {
       it("Should set the right owner", async function () {
         const { playerCard, owner } = await loadFixture(deployContractsFixture);
-        
+
         expect(await playerCard.hasRole(await playerCard.DEFAULT_ADMIN_ROLE(), owner.address))
           .to.be.true;
       });
 
       it("Should grant MINTER_ROLE to owner", async function () {
         const { playerCard, owner } = await loadFixture(deployContractsFixture);
-        
+
         expect(await playerCard.hasRole(await playerCard.MINTER_ROLE(), owner.address))
           .to.be.true;
       });
@@ -106,7 +106,7 @@ describe("SuperFantasy", function () {
   describe("LeagueFactory", function () {
     describe("League Creation", function () {
       it("Should create a new league", async function () {
-        const { leagueFactory, leagueStartTime, leagueEndTime, entryFee, maxTeams } = 
+        const { leagueFactory, leagueStartTime, leagueEndTime, entryFee, maxTeams } =
           await loadFixture(deployContractsFixture);
 
         await expect(
@@ -121,7 +121,7 @@ describe("SuperFantasy", function () {
       });
 
       it("Should fail if end time is before start time", async function () {
-        const { leagueFactory, currentTime, entryFee, maxTeams } = 
+        const { leagueFactory, currentTime, entryFee, maxTeams } =
           await loadFixture(deployContractsFixture);
 
         await expect(
@@ -140,7 +140,7 @@ describe("SuperFantasy", function () {
   describe("League", function () {
     async function deployLeagueFixture() {
       const baseFixture = await deployContractsFixture();
-      
+
       // Create a league
       const tx = await baseFixture.leagueFactory.createLeague(
         "Test League",
@@ -152,7 +152,7 @@ describe("SuperFantasy", function () {
       const receipt = await tx.wait();
       const event = receipt?.logs[0];
       const leagueAddress = event?.args?.leagueAddress;
-      
+
       const League = await hre.ethers.getContractFactory("League");
       const league = League.attach(leagueAddress);
 
@@ -201,7 +201,7 @@ describe("SuperFantasy", function () {
   describe("TournamentFactory", function () {
     describe("Tournament Creation", function () {
       it("Should create a new tournament", async function () {
-        const { tournamentFactory, leagueStartTime, leagueEndTime } = 
+        const { tournamentFactory, leagueStartTime, leagueEndTime } =
           await loadFixture(deployContractsFixture);
 
         await expect(
@@ -218,7 +218,7 @@ describe("SuperFantasy", function () {
   describe("Tournament", function () {
     async function deployTournamentFixture() {
       const baseFixture = await deployContractsFixture();
-      
+
       // Create a tournament
       const tx = await baseFixture.tournamentFactory.createTournament(
         "Test Tournament",
@@ -228,7 +228,7 @@ describe("SuperFantasy", function () {
       const receipt = await tx.wait();
       const event = receipt?.logs[0];
       const tournamentAddress = event?.args?.tournamentAddress;
-      
+
       const Tournament = await hre.ethers.getContractFactory("Tournament");
       const tournament = Tournament.attach(tournamentAddress);
 
