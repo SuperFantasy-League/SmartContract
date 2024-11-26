@@ -10,16 +10,17 @@ contract UserPlayerManager {
         uint256 id;
         string name;
         bool isRegistered;
+        // uint256[] seasonPoints;
     }
 
     struct Player {
         uint256 playerId;
         string name;
-        string club;       
-        uint256 position;  // 1: GK, 2: DEF, 3: MID, 4: FWD
-        uint256 price;     
-        uint256 points;    
-        bool isActive;     
+        string club;
+        uint256 position; // 1: GK, 2: DEF, 3: MID, 4: FWD
+        uint256 price;
+        uint256 points;
+        bool isActive;
     }
 
     // Team composition requirements
@@ -30,13 +31,25 @@ contract UserPlayerManager {
     uint256 public constant TEAM_SIZE = 15;
 
     mapping(address => User) public users;
+    mapping(address => uint256) public userBalances;
+    mapping(address => uint256[]) public userLeagues;
     mapping(uint256 => Player) public players;
     mapping(string => bool) public playerNameExists;
     mapping(uint256 => mapping(uint256 => uint256)) public weeklyPlayerPoints;
 
     event UserRegistered(address indexed user, string name);
-    event PlayerCreated(uint256 indexed playerId, string name, string club, uint256 position, uint256 price);
-    event PlayerPointsUpdated(uint256 indexed playerId, uint256 weekNumber, uint256 points);
+    event PlayerCreated(
+        uint256 indexed playerId,
+        string name,
+        string club,
+        uint256 position,
+        uint256 price
+    );
+    event PlayerPointsUpdated(
+        uint256 indexed playerId,
+        uint256 weekNumber,
+        uint256 points
+    );
 
     constructor() {
         admin = msg.sender;
@@ -51,10 +64,10 @@ contract UserPlayerManager {
         require(msg.sender != address(0), "Invalid address");
         require(!users[msg.sender].isRegistered, "Already registered");
         require(bytes(_name).length > 0, "Empty name");
-        
+
         uint256 userId = ++userCounter;
         users[msg.sender] = User(userId, _name, true);
-        
+
         emit UserRegistered(msg.sender, _name);
     }
 
@@ -68,7 +81,7 @@ contract UserPlayerManager {
         require(bytes(_club).length > 0, "Empty club");
         require(_price > 0, "Invalid price");
         require(!playerNameExists[_name], "Player exists");
-        
+
         uint256 playerId = ++playerCounter;
         players[playerId] = Player(
             playerId,
@@ -80,24 +93,42 @@ contract UserPlayerManager {
             true
         );
         playerNameExists[_name] = true;
-        
+
         emit PlayerCreated(playerId, _name, _club, _position, _price);
     }
 
+    function updatePlayer(
+        uint256 _playerId,
+        string memory _club,
+        uint256 _position,
+        uint256 _price,
+        bool _isActive
+    ) external onlyAdmin {
+        require(_playerId <= playerCounter, "Invalid player ID");
+
+        Player storage pl = players[_playerId];
+        pl.club = _club;
+        pl.position = _position;
+        pl.price = _price;
+        pl.isActive = _isActive;
+    }
+
     function updateWeeklyPoints(
-        uint256 _playerId, 
-        uint256 _weekNumber, 
+        uint256 _playerId,
+        uint256 _weekNumber,
         uint256 _points
     ) external onlyAdmin {
         require(_playerId <= playerCounter, "Invalid player ID");
-        
+
         weeklyPlayerPoints[_playerId][_weekNumber] = _points;
         players[_playerId].points += _points;
-        
+
         emit PlayerPointsUpdated(_playerId, _weekNumber, _points);
     }
 
-    function validateTeamPlayers(uint256[] calldata playerIds) public view returns (bool) {
+    function validateTeamPlayers(
+        uint256[] calldata playerIds
+    ) public view returns (bool) {
         require(playerIds.length == TEAM_SIZE, "Invalid team size");
 
         uint256 gkCount;
@@ -116,22 +147,26 @@ contract UserPlayerManager {
             else if (player.position == 4) fwdCount++;
         }
 
-        return (
-            gkCount == REQUIRED_GOALKEEPERS &&
+        return (gkCount == REQUIRED_GOALKEEPERS &&
             defCount == REQUIRED_DEFENDERS &&
             midCount == REQUIRED_MIDFIELDERS &&
-            fwdCount == REQUIRED_FORWARDS
-        );
+            fwdCount == REQUIRED_FORWARDS);
     }
 
-    function getPlayer(uint256 _playerId) external view returns (
-        string memory name,
-        string memory club,
-        uint256 position,
-        uint256 price,
-        uint256 points,
-        bool isActive
-    ) {
+    function getPlayer(
+        uint256 _playerId
+    )
+        external
+        view
+        returns (
+            string memory name,
+            string memory club,
+            uint256 position,
+            uint256 price,
+            uint256 points,
+            bool isActive
+        )
+    {
         require(_playerId <= playerCounter, "Invalid player ID");
         Player memory player = players[_playerId];
         return (
@@ -144,21 +179,30 @@ contract UserPlayerManager {
         );
     }
 
-    function getPlayerWeeklyPoints(uint256 _playerId, uint256 _weekNumber) 
-        external 
-        view 
-        returns (uint256) 
-    {
+    function getPlayerWeeklyPoints(
+        uint256 _playerId,
+        uint256 _weekNumber
+    ) external view returns (uint256) {
         require(_playerId <= playerCounter, "Invalid player ID");
         return weeklyPlayerPoints[_playerId][_weekNumber];
     }
 
-    function calculateTeamValue(uint256[] calldata playerIds) external view returns (uint256) {
+    function calculateTeamValue(
+        uint256[] calldata playerIds
+    ) external view returns (uint256) {
         uint256 totalValue = 0;
-        for(uint256 i = 0; i < playerIds.length; i++) {
+        for (uint256 i = 0; i < playerIds.length; i++) {
             require(playerIds[i] <= playerCounter, "Invalid player ID");
             totalValue += players[playerIds[i]].price;
         }
         return totalValue;
+    }
+
+    function addUserLeague(address _user, uint256 _leagueId) external {
+        userLeagues[_user].push(_leagueId);
+    }
+
+    function getBalance() external view returns (uint256) {
+        return userBalances[msg.sender];
     }
 }
