@@ -7,10 +7,16 @@ import "./League.sol";
 contract LeagueFactory {
     UserPlayerManager public userPlayerManager;
     address public admin;
-    uint256 private currentLeagueId;
+    uint256 private currentLeagueCounter;
+    uint256 public currentLeagueWeek = 1;
     mapping(uint256 => address) public leagues;
 
-    event LeagueCreated(uint256 indexed leagueId, address leagueAddress, string name, address owner);
+    event LeagueCreated(
+        uint256 indexed leagueId,
+        address leagueAddress,
+        string name,
+        address owner
+    );
 
     constructor(address _userPlayerManager) {
         require(_userPlayerManager != address(0), "Invalid UserPlayerManager");
@@ -31,10 +37,13 @@ contract LeagueFactory {
         require(endTime > startTime, "End time must be after start");
         require(maxTeams > 0, "Invalid max teams");
         require(msg.value == entryFee, "Incorrect entry fee");
-        require(userPlayerManager.validateTeamPlayers(playerIds), "Invalid team composition");
-        
-        currentLeagueId++;
-        
+        require(
+            userPlayerManager.validateTeamPlayers(playerIds),
+            "Invalid team composition"
+        );
+
+        uint256 currentLeagueId = ++currentLeagueCounter;
+
         League newLeague = new League(
             currentLeagueId,
             name,
@@ -43,21 +52,26 @@ contract LeagueFactory {
             maxTeams,
             startTime,
             endTime,
+            currentLeagueWeek,
             address(userPlayerManager)
         );
-        
+
         address leagueAddress = address(newLeague);
         leagues[currentLeagueId] = leagueAddress;
 
         // Register creator's team
-        League(leagueAddress).registerCreatorTeam{value: msg.value}(msg.sender, playerIds);
-        
+        League(leagueAddress).registerCreatorTeam(msg.sender, playerIds);
+        userPlayerManager.addUserLeague(msg.sender, currentLeagueId);
+
         emit LeagueCreated(currentLeagueId, leagueAddress, name, msg.sender);
         return leagueAddress;
     }
 
     function getLeague(uint256 leagueId) external view returns (address) {
-        require(leagueId > 0 && leagueId <= currentLeagueId, "Invalid league ID");
+        require(
+            leagueId > 0 && leagueId <= currentLeagueCounter,
+            "Invalid league ID"
+        );
         return leagues[leagueId];
     }
 }

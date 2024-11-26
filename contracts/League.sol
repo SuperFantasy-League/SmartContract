@@ -8,6 +8,12 @@ import "./UserPlayerManager.sol";
  */
 contract League {
     uint256 public constant WEEK_DURATION = 7 days;
+    uint256 private constant _NOT_ENTERED = 1;
+    uint256 private constant _ENTERED = 2;
+    uint256 private _status;
+    address public immutable leagueFactory;
+
+    UserPlayerManager public userPlayerManager;
 
     struct Team {
         address owner;
@@ -23,21 +29,18 @@ contract League {
     uint256 public maxTeams;
     uint256 public startTime;
     uint256 public endTime;
+    uint256 public currentWeek;
     uint256 public totalPrizePool;
     bool public active;
 
-    UserPlayerManager public userPlayerManager;
-
-    mapping(address => Team) public teams;
     address[] public participants;
+    // mapping(address => Team) public teams;
+    mapping(address => mapping(uint256 => Team)) public teams;
     mapping(uint256 => address) public weeklyWinners;
     mapping(uint256 => bool) public weeklyRewardsClaimed;
     mapping(uint256 => uint256) public weeklyPrizePools;
 
-    uint256 private _status;
-    uint256 private constant _NOT_ENTERED = 1;
-    uint256 private constant _ENTERED = 2;
-
+    event LeagueJoined(address indexed user, uint256 leagueId);
     event TeamRegistered(address indexed owner, uint256[] playerIds);
     event PointsUpdated(address indexed teamOwner, uint256 newPoints);
     event WeeklyWinnerDeclared(
@@ -50,6 +53,7 @@ contract League {
         address winner,
         uint256 amount
     );
+    event WeekAdvanced(uint256 currentWeek);
 
     modifier nonReentrant() {
         require(_status != _ENTERED, "ReentrancyGuard: reentrant call");
@@ -71,6 +75,7 @@ contract League {
         uint256 _maxTeams,
         uint256 _startTime,
         uint256 _endTime,
+        uint256 _currentLeagueWeek,
         address _userPlayerManagerAddress
     ) {
         leagueId = _leagueId;
@@ -80,27 +85,23 @@ contract League {
         maxTeams = _maxTeams;
         startTime = _startTime;
         endTime = _endTime;
-        active = true;
+        currentWeek = _currentLeagueWeek;
         userPlayerManager = UserPlayerManager(_userPlayerManagerAddress);
+        leagueFactory = msg.sender;
+        active = true;
         _status = _NOT_ENTERED;
     }
 
-    function registerTeam(
-        uint256[] calldata playerIds
-    ) external payable nonReentrant {
-        require(active, "League is not active");
-        require(block.timestamp < startTime, "League has started");
+    function joinLeague() external payable nonReentrant {
         require(msg.value == entryFee, "Incorrect entry fee");
         require(participants.length < maxTeams, "League is full");
-        require(!teams[msg.sender].isRegistered, "Team already registered");
-
         require(
-            userPlayerManager.validateTeamPlayers(playerIds),
-            "Invalid team"
+            !teams[msg.sender][currentWeek].isRegistered,
+            "Team already registered"
         );
+        require(active, "League is not active");
 
-        teams[msg.sender] = Team(msg.sender, playerIds, 0, true);
-        participants.push(msg.sender);
+        userPlayerManager.addUserLeague(msg.sender, leagueId);
         totalPrizePool += msg.value;
 
         uint256 weeksInLeague = (endTime - startTime) / WEEK_DURATION;
@@ -108,6 +109,37 @@ contract League {
         for (uint256 week = 0; week < weeksInLeague; week++) {
             weeklyPrizePools[week] += weeklyPrize;
         }
+        emit LeagueJoined(msg.sender, leagueId);
+    }
+
+    function registerCreatorTeam(
+        address creator,
+        uint256[] calldata playerIds
+    ) external {
+        require(msg.sender == leagueFactory, "Only factory");
+
+        teams[creator][currentWeek] = Team(creator, playerIds, 0, true);
+        participants.push(creator);
+
+        emit TeamRegistered(creator, playerIds);
+    }
+
+    function registerTeam(uint256[] calldata playerIds) external {
+        require(active, "League is not active");
+        require(block.timestamp < startTime, "League has started");
+        require(
+            !teams[msg.sender][currentWeek].isRegistered,
+            "Already registered this week"
+        );
+
+        // Validate team composition
+        require(
+            userPlayerManager.validateTeamPlayers(playerIds),
+            "Invalid team composition"
+        );
+
+        // Create new team for this week
+        teams[msg.sender][currentWeek] = Team(msg.sender, playerIds, 0, true);
 
         emit TeamRegistered(msg.sender, playerIds);
     }
@@ -116,10 +148,13 @@ contract League {
         address teamOwner,
         uint256 weekNumber
     ) public view returns (uint256) {
-        require(teams[teamOwner].isRegistered, "Team not registered");
+        require(
+            teams[teamOwner][weekNumber].isRegistered,
+            "Team not registered"
+        );
 
         uint256 totalPoints = 0;
-        uint256[] memory playerIds = teams[teamOwner].playerIds;
+        uint256[] memory playerIds = teams[teamOwner][weekNumber].playerIds;
 
         for (uint256 i = 0; i < playerIds.length; i++) {
             totalPoints += userPlayerManager.getPlayerWeeklyPoints(
@@ -140,7 +175,7 @@ contract League {
         for (uint256 i = 0; i < participants.length; i++) {
             address participant = participants[i];
             uint256 points = calculateTeamPoints(participant, weekNumber);
-            teams[participant].points = points;
+            teams[participant][weekNumber].points = points;
             emit PointsUpdated(participant, points);
         }
     }
@@ -157,8 +192,8 @@ contract League {
 
         for (uint256 i = 0; i < participants.length; i++) {
             address participant = participants[i];
-            if (teams[participant].points > highestPoints) {
-                highestPoints = teams[participant].points;
+            if (teams[participant][weekNumber].points > highestPoints) {
+                highestPoints = teams[participant][weekNumber].points;
                 winner = participant;
             }
         }
@@ -187,28 +222,14 @@ contract League {
         emit RewardClaimed(weekNumber, msg.sender, prize);
     }
 
-    function getCurrentWeek() public view returns (uint256) {
-        if (block.timestamp < startTime) return 0;
-        return (block.timestamp - startTime) / WEEK_DURATION;
-    }
+    // function getCurrentWeek() public view returns (uint256) {
+    //     if (block.timestamp < startTime) return 0;
+    //     return (block.timestamp - startTime) / WEEK_DURATION;
+    // }
 
-    function registerCreatorTeam(
-        address creator,
-        uint256[] calldata playerIds
-    ) external payable {
-        require(msg.sender == address(leagueFactory), "Only factory");
-        require(msg.value == entryFee, "Incorrect entry fee");
-
-        teams[creator] = Team(creator, playerIds, 0, true);
-        participants.push(creator);
-        totalPrizePool += msg.value;
-
-        uint256 weeksInLeague = (endTime - startTime) / WEEK_DURATION;
-        uint256 weeklyPrize = msg.value / weeksInLeague;
-        for (uint256 week = 0; week < weeksInLeague; week++) {
-            weeklyPrizePools[week] += weeklyPrize;
-        }
-
-        emit TeamRegistered(creator, playerIds);
+    function advanceWeek() external {
+        require(msg.sender == owner, "Only admin can advance week");
+        currentWeek++;
+        emit WeekAdvanced(currentWeek);
     }
 }
