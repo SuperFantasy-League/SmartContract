@@ -5,6 +5,9 @@ contract UserPlayerManager {
     address public admin;
     uint256 public userCounter;
     uint256 public playerCounter;
+    uint256 private constant _NOT_ENTERED = 1;
+    uint256 private constant _ENTERED = 2;
+    uint256 private _status;
 
     struct User {
         uint256 id;
@@ -33,6 +36,7 @@ contract UserPlayerManager {
     mapping(address => User) public users;
     mapping(address => uint256) public userBalances;
     mapping(address => uint256[]) public userLeagues;
+
     mapping(uint256 => Player) public players;
     mapping(string => bool) public playerNameExists;
     mapping(uint256 => mapping(uint256 => uint256)) public weeklyPlayerPoints;
@@ -50,6 +54,8 @@ contract UserPlayerManager {
         uint256 weekNumber,
         uint256 points
     );
+    event DepositSuccessful(address indexed sender, uint amount);
+    event WithdrawSuccessful(address indexed receiver, uint amount);
 
     constructor() {
         admin = msg.sender;
@@ -58,6 +64,13 @@ contract UserPlayerManager {
     modifier onlyAdmin() {
         require(msg.sender == admin, "Only admin");
         _;
+    }
+
+    modifier nonReentrant() {
+        require(_status != _ENTERED, "ReentrancyGuard: Reentrant call");
+        _status = _ENTERED;
+        _;
+        _status = _NOT_ENTERED;
     }
 
     function registerUser(string calldata _name) external {
@@ -200,6 +213,32 @@ contract UserPlayerManager {
 
     function addUserLeague(address _user, uint256 _leagueId) external {
         userLeagues[_user].push(_leagueId);
+    }
+
+    function deposit() external payable nonReentrant {
+        require(msg.sender != address(0), "Zero address detected!");
+        require(msg.value > 0, "Cannot deposit zero!");
+
+        userBalances[msg.sender] += msg.value;
+
+        emit DepositSuccessful(msg.sender, msg.value);
+    }
+
+    function withdraw(uint _amount) external nonReentrant {
+        require(msg.sender != address(0), "Zero address detected!");
+        require(_amount > 0, "Zero amount detected!");
+        require(userBalances[msg.sender] >= _amount, "Insufficient funds!");
+
+        userBalances[msg.sender] -= _amount;
+
+        (bool success, ) = msg.sender.call{value: _amount}("");
+        require(success, "Ether transfer failed!");
+
+        emit WithdrawSuccessful(msg.sender, _amount);
+    }
+
+    function updateUserBalances(address _user, uint256 _amount) external {
+        userBalances[_user] += _amount;
     }
 
     function getBalance() external view returns (uint256) {
