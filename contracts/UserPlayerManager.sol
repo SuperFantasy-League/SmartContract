@@ -47,7 +47,6 @@ contract UserPlayerManager {
         address sender;
         address receiver;
         uint256 leagueId;
-        bool processed;
     }
 
     enum TransactionType {
@@ -68,8 +67,8 @@ contract UserPlayerManager {
     mapping(address => uint256) public userBalances;
     mapping(address => uint256[]) public userLeagues;
     mapping(address => uint256[]) public userTeams;
-    mapping(address => mapping(uint256 teamId => Team)) public allTeams;
     mapping(address => Transaction[]) public userTransactions;
+    mapping(address => mapping(uint256 teamId => Team)) public allTeams;
 
     mapping(uint256 => Player) public players;
     mapping(string => bool) public playerNameExists;
@@ -373,8 +372,7 @@ contract UserPlayerManager {
             timestamp: block.timestamp,
             sender: _sender,
             receiver: _receiver,
-            leagueId: _leagueId,
-            processed: true
+            leagueId: _leagueId
         });
 
         userTransactions[_sender].push(newTx);
@@ -390,6 +388,12 @@ contract UserPlayerManager {
         );
 
         return txId;
+    }
+
+    function getUserTransactions(
+        address _user
+    ) external view returns (Transaction[] memory) {
+        return userTransactions[_user];
     }
 
     function registerTeamInLeague(

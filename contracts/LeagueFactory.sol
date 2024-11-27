@@ -55,7 +55,7 @@ contract LeagueFactory {
             msg.value,
             msg.sender,
             address(this),
-            currentLeagueCounter
+            currentLeagueId
         );
 
         emit LeagueCreated(currentLeagueId, leagueAddress, name, msg.sender);
