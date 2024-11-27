@@ -48,7 +48,15 @@ contract LeagueFactory {
 
         address leagueAddress = address(newLeague);
         leagues[currentLeagueId] = leagueAddress;
-        userPlayerManager.addUserLeague(msg.sender, currentLeagueId);
+        userPlayerManager.addUserToLeague(msg.sender, currentLeagueId);
+
+        userPlayerManager.addTransaction(
+            UserPlayerManager.TransactionType.STAKE,
+            msg.value,
+            msg.sender,
+            address(this),
+            currentLeagueId
+        );
 
         emit LeagueCreated(currentLeagueId, leagueAddress, name, msg.sender);
         return (leagueAddress, currentLeagueId);
