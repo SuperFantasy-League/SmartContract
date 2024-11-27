@@ -109,6 +109,12 @@ contract UserPlayerManager {
         address indexed owner,
         uint256 indexed leagueId
     );
+    event TeamUpdated(
+        address indexed owner,
+        uint256 indexed teamId,
+        uint256 indexed playerId,
+        uint256 playerIndex
+    );
 
     constructor() {
         admin = msg.sender;
@@ -158,6 +164,22 @@ contract UserPlayerManager {
         emit TeamCreated(msg.sender, currentTeamId, _playerIds);
     }
 
+    function updateTeam(
+        uint256 _teamId,
+        uint256 _playerId,
+        uint256 _playerIndex
+    ) external {
+        Team storage team = allTeams[msg.sender][_teamId];
+        require(team.exists, "No team found!");
+        require(team.owner == msg.sender, "Not team owner");
+        require(_playerIndex < team.playerIds.length, "Invalid player index");
+
+        // Update the player ID at the specified index
+        team.playerIds[_playerIndex] = _playerId;
+
+        emit TeamUpdated(msg.sender, _teamId, _playerId, _playerIndex);
+    }
+
     function calculateTeamValue(
         uint256[] calldata playerIds
     ) external view returns (uint256) {
@@ -176,6 +198,25 @@ contract UserPlayerManager {
         Team memory team = allTeams[_owner][_teamId];
         require(team.exists, "Team not found");
         return team;
+    }
+
+    function getTeamPoints(
+        address _owner,
+        uint256 _teamId
+    ) external view returns (uint256) {
+        return allTeams[_owner][_teamId].points;
+    }
+
+    function getUserTeams(
+        address _owner
+    ) external view returns (uint256[] memory) {
+        return userTeams[_owner];
+    }
+
+    function getUserLeagues(
+        address _owner
+    ) external view returns (uint256[] memory) {
+        return userLeagues[_owner];
     }
 
     function createPlayer(
